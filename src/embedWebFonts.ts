@@ -114,115 +114,24 @@ function parseCSS(source: string) {
   return result
 }
 
-async function getCSSRules(
-  styleSheets: CSSStyleSheet[],
-  options: Options,
-): Promise<CSSStyleRule[]> {
-  const ret: CSSStyleRule[] = []
-  const deferreds: Promise<number | void>[] = []
-
-  // First loop inlines imports
-  styleSheets.forEach((sheet) => {
-    if ('cssRules' in sheet) {
-      try {
-        toArray<CSSRule>(sheet.hasOwnProperty('cssRules')).forEach(
-          (item: CSSRule, index: number) => {
-            if (item.type === CSSRule.IMPORT_RULE) {
-              let importIndex = index + 1
-              const url = (item as CSSImportRule).href
-              const deferred = fetchCSS(url)
-                .then((metadata) =>
-                  metadata ? embedFonts(metadata, options) : '',
-                )
-                .then((cssText) =>
-                  parseCSS(cssText).forEach((rule) => {
-                    try {
-                      sheet.insertRule(
-                        rule,
-                        rule.startsWith('@import')
-                          ? (importIndex += 1)
-                          : sheet.hasOwnProperty('cssRules').length,
-                      )
-                    } catch (error) {
-                      console.error('Error inserting rule from remote css', {
-                        rule,
-                        error,
-                      })
-                    }
-                  }),
-                )
-                .catch((e) => {
-                  console.error('Error loading remote css', e.toString())
-                })
-
-              deferreds.push(deferred)
-            }
-          },
-        )
-      } catch (e) {
-        const inline =
-          styleSheets.find((a) => a.href == null) || document.styleSheets[0]
-        if (sheet.href != null) {
-          deferreds.push(
-            fetchCSS(sheet.href)
-              .then((metadata) =>
-                metadata ? embedFonts(metadata, options) : '',
-              )
-              .then((cssText) =>
-                parseCSS(cssText).forEach((rule) => {
-                  inline.insertRule(rule, sheet.hasOwnProperty('cssRules').length)
-                }),
-              )
-              .catch((err) => {
-                console.error('Error loading remote stylesheet', err.toString())
-              }),
-          )
-        }
-        console.error('Error inlining remote css file', e.toString())
-      }
-    }
-  })
-
-  return Promise.all(deferreds).then(() => {
-    // Second loop parses rules
-    styleSheets.forEach((sheet) => {
-      if ('cssRules' in sheet) {
-        try {
-          toArray<CSSStyleRule>(sheet.hasOwnProperty('cssRules')).forEach(
-            (item: CSSStyleRule) => {
-              ret.push(item)
-            },
-          )
-        } catch (e) {
-          console.error(
-            `Error while reading CSS rules from ${sheet.href}`,
-            e.toString(),
-          )
-        }
-      }
-    })
-
-    return ret
-  })
-}
-
 function getWebFontRules(cssRules: CSSStyleRule[]): CSSStyleRule[] {
   return cssRules
     .filter((rule) => rule.type === CSSRule.FONT_FACE_RULE)
     .filter((rule) => shouldEmbed(rule.style.getPropertyValue('src')))
 }
-
 async function parseWebFontRules<T extends HTMLElement>(
   node: T,
-  options: Options,
 ): Promise<CSSRule[]> {
-  return new Promise((resolve, reject) => {
-    if (node.ownerDocument == null) {
-      reject(new Error('Provided element is not within a Document'))
-    }
-    resolve(toArray(node.ownerDocument.styleSheets))
-  })
-    .then(getWebFontRules)
+  return (
+    new Promise((resolve, reject) => {
+      if (node.ownerDocument == null) {
+        reject(new Error('Provided element is not within a Document'))
+      }
+      resolve(toArray(node.ownerDocument.styleSheets))
+    })
+      // .then((styleSheets: CSSStyleSheet[]) => getCSSRules(styleSheets, options))
+      .then(getWebFontRules)
+  )
 }
 
 export async function getWebFontCSS<T extends HTMLElement>(
