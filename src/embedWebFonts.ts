@@ -222,7 +222,6 @@ async function parseWebFontRules<T extends HTMLElement>(
     }
     resolve(toArray(node.ownerDocument.styleSheets))
   })
-    .then((styleSheets: CSSStyleSheet[]) => getCSSRules(styleSheets, options))
     .then(getWebFontRules)
 }
 
